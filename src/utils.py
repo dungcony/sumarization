@@ -231,10 +231,18 @@ def detect_precision() -> str:
     """Tự động phát hiện độ chính xác huấn luyện tốt nhất cho phần cứng hiện tại.
 
     Trả về:
-        'bf16' nếu GPU hỗ trợ bfloat16 (Ampere+),
+        'bf16' nếu TPU hoặc GPU hỗ trợ bfloat16 (Ampere+),
         'fp16' nếu CUDA có sẵn,
         'fp32' nếu không hỗ trợ (CPU).
     """
+    # Kiểm tra TPU (torch_xla) — TPU v5e hỗ trợ bf16 native
+    try:
+        import torch_xla.core.xla_model as xm
+        _ = xm.xla_device()
+        return "bf16"
+    except Exception:
+        pass
+
     if not torch.cuda.is_available():
         return "fp32"
 
@@ -245,13 +253,30 @@ def detect_precision() -> str:
 
 
 def get_device_info() -> dict[str, Any]:
-    """Nhận thông tin thiết bị hiện tại.
+    """Nhận thông tin thiết bị hiện tại (GPU, TPU, hoặc CPU).
 
     Trả về:
-        Dictionary với loại thiết bị, số lượng GPU, tên GPU, v.v.
+        Dictionary với loại thiết bị, số lượng GPU/TPU, tên, v.v.
     """
+    # Kiểm tra TPU
+    try:
+        import torch_xla.core.xla_model as xm
+        device = xm.xla_device()
+        return {
+            "device": "tpu",
+            "tpu_available": True,
+            "cuda_available": False,
+            "num_gpus": 0,
+            "gpu_names": [],
+            "tpu_device": str(device),
+            "precision": "bf16",
+        }
+    except Exception:
+        pass
+
     info = {
         "cuda_available": torch.cuda.is_available(),
+        "tpu_available": False,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "num_gpus": torch.cuda.device_count() if torch.cuda.is_available() else 0,
         "gpu_names": [],
