@@ -1,0 +1,58 @@
+# =============================================================================
+# BARTpho Syllable
+# =============================================================================
+# Vietnamese BART model using syllable-level tokenization.
+# Good alternative to ViT5, competitive ROUGE scores.
+#
+# Model: vinai/bartpho-syllable (Vietnamese BART, ~140M params)
+# Training: Full fine-tuning
+# Note: BARTpho does NOT use source prefix (unlike T5)
+# =============================================================================
+
+model:
+  name_or_path: "vinai/bartpho-syllable"
+  use_fast_tokenizer: true        # BARTpho works fine with fast tokenizer
+  trust_remote_code: false
+
+data:
+  train_file: "../../data/fine-turn/train-00000-of-00001.parquet"
+  valid_file: "../../data/fine-turn/valid-00000-of-00001.parquet"
+  source_prefix: ""               # BARTpho does NOT use prefix
+  max_source_length: 768
+  max_target_length: 160
+
+training:
+  output_dir: "outputs/bartpho"
+  seed: 42
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 2
+  learning_rate: 0.00002          # 2e-5 (slightly lower than ViT5)
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  label_smoothing_factor: 0.05
+  precision: "auto"
+  eval_strategy: "steps"
+  eval_steps: 500
+  save_strategy: "steps"
+  save_steps: 500
+  save_total_limit: 2
+  logging_steps: 100
+  metric_for_best_model: "rougeL"
+  greater_is_better: true
+  load_best_model_at_end: true
+  early_stopping_patience: 5
+
+generation:
+  max_length: 200
+  min_length: 30
+  num_beams: 4
+  length_penalty: 1.0
+  no_repeat_ngram_size: 3
+  repetition_penalty: 1.0
+  early_stopping: true
+
+lora:
+  enabled: false

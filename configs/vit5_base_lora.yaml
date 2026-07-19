@@ -1,0 +1,62 @@
+# =============================================================================
+# ViT5-base with LoRA (Parameter-Efficient Fine-tuning)
+# =============================================================================
+# Uses LoRA to train only ~2% of parameters while keeping performance close
+# to full fine-tuning. Good when GPU memory is limited.
+#
+# Model: VietAI/vit5-base (223M total, ~3M trainable with LoRA)
+# Training: LoRA rank=16, targets attention Q and V projections
+# Hardware: Works on GPUs with ≥8GB VRAM
+# =============================================================================
+
+model:
+  name_or_path: "VietAI/vit5-base"
+  use_fast_tokenizer: false
+  trust_remote_code: false
+
+data:
+  train_file: "../../data/fine-turn/train-00000-of-00001.parquet"
+  valid_file: "../../data/fine-turn/valid-00000-of-00001.parquet"
+  source_prefix: "summarize: "
+  max_source_length: 768
+  max_target_length: 160
+
+training:
+  output_dir: "outputs/vit5_base_lora"
+  seed: 42
+  num_train_epochs: 5             # More epochs since fewer params to update
+  per_device_train_batch_size: 8  # Larger batch possible with LoRA
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 1
+  learning_rate: 0.0001           # Higher LR for LoRA (1e-4)
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  label_smoothing_factor: 0.05
+  precision: "auto"
+  eval_strategy: "steps"
+  eval_steps: 500
+  save_strategy: "steps"
+  save_steps: 500
+  save_total_limit: 2
+  logging_steps: 100
+  metric_for_best_model: "rougeL"
+  greater_is_better: true
+  load_best_model_at_end: true
+  early_stopping_patience: 5
+
+generation:
+  max_length: 200
+  min_length: 30
+  num_beams: 4
+  length_penalty: 1.0
+  no_repeat_ngram_size: 3
+  repetition_penalty: 1.0
+  early_stopping: true
+
+lora:
+  enabled: true                   # Enable LoRA
+  r: 16                           # LoRA rank
+  lora_alpha: 32                  # Scaling factor (2 * r)
+  lora_dropout: 0.05
+  target_modules: "auto"          # Auto-detect: ['q', 'v'] for T5
