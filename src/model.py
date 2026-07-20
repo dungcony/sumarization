@@ -169,17 +169,22 @@ def load_model(
 
     # Bước 6: Đặt cấu hình sinh (generation config)
     if generation_config:
-        model.generation_config = GenerationConfig(
-            max_length=generation_config.max_length,
-            max_new_tokens=generation_config.max_new_tokens,
-            min_length=generation_config.min_length,
-            num_beams=generation_config.num_beams,
-            length_penalty=generation_config.length_penalty,
-            no_repeat_ngram_size=generation_config.no_repeat_ngram_size,
-            repetition_penalty=generation_config.repetition_penalty,
-            do_sample=generation_config.do_sample,
-            early_stopping=generation_config.early_stopping,
-        )
+        gen_cfg = getattr(model, "generation_config", GenerationConfig())
+        gen_cfg.max_length = generation_config.max_length
+        gen_cfg.max_new_tokens = generation_config.max_new_tokens
+        gen_cfg.min_length = generation_config.min_length
+        gen_cfg.num_beams = generation_config.num_beams
+        gen_cfg.length_penalty = generation_config.length_penalty
+        gen_cfg.no_repeat_ngram_size = generation_config.no_repeat_ngram_size
+        gen_cfg.repetition_penalty = generation_config.repetition_penalty
+        gen_cfg.do_sample = generation_config.do_sample
+        gen_cfg.early_stopping = generation_config.early_stopping
+        
+        # Sửa lỗi mất decoder_start_token_id khi khởi tạo generation_config mới
+        if gen_cfg.decoder_start_token_id is None:
+            gen_cfg.decoder_start_token_id = getattr(model.config, "decoder_start_token_id", tokenizer.pad_token_id)
+            
+        model.generation_config = gen_cfg
 
     # Bước 7: Xác thực số lượng tham số
     params = count_parameters(model)
