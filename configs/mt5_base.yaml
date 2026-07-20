@@ -17,6 +17,7 @@ model:
 data:
   train_file: "data/fine-turn/train-00000-of-00001.parquet"
   valid_file: "data/fine-turn/valid-00000-of-00001.parquet"
+  test_file: "data/fine-turn/test-00000-of-00001.parquet"
   source_prefix: "summarize: "
   max_source_length: 768
   max_target_length: 160
