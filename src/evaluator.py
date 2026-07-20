@@ -32,7 +32,7 @@ from typing import Any, Callable, Optional
 import numpy as np
 
 from src.config import SummarizationConfig, config_to_dict
-from src.data import load_parquet_dataset, preprocess_for_seq2seq
+from src.data import load_dataset_from_files, preprocess_for_seq2seq
 from src.model import load_model, load_tokenizer
 from src.utils import format_number, save_json, setup_logger
 
@@ -196,7 +196,7 @@ def evaluate_checkpoint(
         model = load_model(model_config, tokenizer, config.generation)
 
     # Tải và tiền xử lý dữ liệu
-    datasets = load_parquet_dataset(
+    datasets = load_dataset_from_files(
         train_file=config.data.train_file,
         valid_file=config.data.valid_file,
     )
