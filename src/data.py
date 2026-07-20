@@ -72,48 +72,50 @@ def clean_text(text: str) -> str:
 # Tải dữ liệu (Data loading)
 # ---------------------------------------------------------------------------
 
-def load_parquet_dataset(
+def load_dataset_from_files(
     train_file: str | Path,
     valid_file: str | Path,
     test_file: Optional[str | Path] = None,
 ) -> DatasetDict:
-    """Tải các file parquet vào một đối tượng HuggingFace DatasetDict.
+    """Tải dữ liệu từ các file hoặc thư mục (hỗ trợ CSV/Parquet) vào DatasetDict.
 
     Tham số:
-        train_file: Đường dẫn đến file parquet huấn luyện.
-        valid_file: Đường dẫn đến file parquet đánh giá (validation).
-        test_file: Tùy chọn đường dẫn đến file parquet kiểm tra (test).
+        train_file: Đường dẫn (hoặc mẫu glob) đến dữ liệu huấn luyện.
+        valid_file: Đường dẫn (hoặc mẫu glob) đến dữ liệu đánh giá.
+        test_file: Tùy chọn đường dẫn (hoặc mẫu glob) đến dữ liệu kiểm tra.
 
     Trả về:
-        DatasetDict chứa các phần chia 'train', 'validation', và tùy chọn 'test'.
-
-    Ngoại lệ:
-        FileNotFoundError: Nếu file huấn luyện hoặc đánh giá không tồn tại.
-        ValueError: Nếu thiếu các cột bắt buộc.
+        DatasetDict chứa các phần chia 'train', 'validation', và 'test'.
     """
-    train_path = Path(train_file)
-    valid_path = Path(valid_file)
-
-    if not train_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy file huấn luyện: {train_path}")
-    if not valid_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy file đánh giá (validation): {valid_path}")
-
-    logger.info(f"Đang tải dữ liệu huấn luyện từ: {train_path}")
-    logger.info(f"Đang tải dữ liệu đánh giá từ: {valid_path}")
-
-    splits = {
-        "train": Dataset.from_parquet(str(train_path)),
-        "validation": Dataset.from_parquet(str(valid_path)),
+    from datasets import load_dataset
+    
+    data_files = {
+        "train": str(train_file),
+        "validation": str(valid_file),
     }
-
     if test_file:
-        test_path = Path(test_file)
-        if test_path.exists():
-            logger.info(f"Đang tải dữ liệu kiểm tra từ: {test_path}")
-            splits["test"] = Dataset.from_parquet(str(test_path))
+        data_files["test"] = str(test_file)
+        
+    # Tự động nhận diện định dạng dựa trên đuôi file
+    file_format = "csv" if "csv" in str(train_file).lower() else "parquet"
+    
+    logger.info(f"Đang tải dữ liệu (định dạng: {file_format}) từ các đường dẫn: {data_files}")
+    dataset = load_dataset(file_format, data_files=data_files)
 
-    dataset = DatasetDict(splits)
+    # Đổi tên cột nếu người dùng gõ sai chính tả (sumary -> summary)
+    for split_name, split_data in dataset.items():
+        if "sumary" in split_data.column_names:
+            logger.info(f"Tự động đổi tên cột 'sumary' thành 'summary' trong tập {split_name}")
+            dataset[split_name] = split_data.rename_column("sumary", "summary")
+            split_data = dataset[split_name]
+            
+        if "Document" in split_data.column_names:
+            dataset[split_name] = split_data.rename_column("Document", "article")
+            split_data = dataset[split_name]
+            
+        if "Summary" in split_data.column_names:
+            dataset[split_name] = split_data.rename_column("Summary", "summary")
+            split_data = dataset[split_name]
 
     # Xác thực các cột bắt buộc
     for split_name, split_data in dataset.items():
@@ -130,8 +132,8 @@ def load_parquet_dataset(
 
     logger.info(
         f"Đã tải tập dữ liệu: "
-        f"{len(dataset['train'])} train, "
-        f"{len(dataset['validation'])} validation"
+        f"{len(dataset.get('train', []))} train, "
+        f"{len(dataset.get('validation', []))} validation"
         + (f", {len(dataset.get('test', []))} test" if 'test' in dataset else "")
     )
 
@@ -252,7 +254,7 @@ def load_and_preprocess(
         >>> train_dataset = datasets['train']
     """
     # Tải dữ liệu thô
-    dataset = load_parquet_dataset(
+    dataset = load_dataset_from_files(
         train_file=data_config.train_file,
         valid_file=data_config.valid_file,
         test_file=data_config.test_file if data_config.test_file else None,
