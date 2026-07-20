@@ -15,8 +15,8 @@ model:
   trust_remote_code: false
 
 data:
-  train_file: "../../data/fine-turn/train-00000-of-00001.parquet"
-  valid_file: "../../data/fine-turn/valid-00000-of-00001.parquet"
+  train_file: "data/fine-turn/train-00000-of-00001.parquet"
+  valid_file: "data/fine-turn/valid-00000-of-00001.parquet"
   source_prefix: "summarize: "    # T5 models expect this prefix
   max_source_length: 768          # Max article length in tokens
   max_target_length: 160          # Max summary length in tokens

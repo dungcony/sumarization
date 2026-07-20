@@ -15,8 +15,8 @@ model:
   trust_remote_code: false
 
 data:
-  train_file: "../../data/fine-turn/train-00000-of-00001.parquet"
-  valid_file: "../../data/fine-turn/valid-00000-of-00001.parquet"
+  train_file: "data/fine-turn/train-00000-of-00001.parquet"
+  valid_file: "data/fine-turn/valid-00000-of-00001.parquet"
   source_prefix: ""               # BARTpho does NOT use prefix
   max_source_length: 768
   max_target_length: 160
