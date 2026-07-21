@@ -105,6 +105,9 @@ def summarize(
             ),
         )
 
+    # Luôn ghi đè đường dẫn model bằng model_path được truyền vào (checkpoint đã train)
+    config.model.name_or_path = str(model_path)
+    
     # Tải mô hình và tokenizer
     tokenizer = load_tokenizer(config.model)
     model = load_model(config.model, tokenizer, config.generation)
@@ -177,6 +180,9 @@ def summarize_batch(
         config = SummarizationConfig(
             model=ModelConfig(name_or_path=str(model_path)),
         )
+
+    # Luôn ghi đè đường dẫn model bằng model_path (checkpoint đã train)
+    config.model.name_or_path = str(model_path)
 
     tokenizer = load_tokenizer(config.model)
     model = load_model(config.model, tokenizer, config.generation)
