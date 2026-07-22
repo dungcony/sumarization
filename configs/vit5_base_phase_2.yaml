@@ -4,7 +4,7 @@ phase:
   description: "Fine-tune toàn bộ ViT5-base trên dữ liệu CSV chuyên ngành." # Mô tả ngắn gọn về phase.
 
 model:
-  name_or_path: "VietAI/vit5-base" #/kaggle/working/outputs_phase_1/vit5_base/best # Khi chạy nối phase, ghi đè bằng đường dẫn checkpoint tốt nhất của phase 1.
+  name_or_path: /kaggle/working/outputs_phase_1/vit5_base/best # Khi chạy nối phase, ghi đè bằng đường dẫn checkpoint tốt nhất của phase 1.
   use_fast_tokenizer: false # ViT5 dùng SentencePiece; tokenizer chậm ổn định hơn.
   trust_remote_code: false # Không chạy mã tùy chỉnh từ model repository.
 
