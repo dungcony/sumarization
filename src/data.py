@@ -14,16 +14,11 @@ Quy trình (Pipeline):
     2. Làm sạch văn bản (Chuẩn hóa Unicode NFC + chuẩn hóa khoảng trắng)
     3. Tokenize với tiền tố (source prefix) cho các mô hình seq2seq
     4. Tạo input_ids + labels cho việc huấn luyện
-
-Ví dụ:
-    >>> from src.data import load_and_preprocess
-    >>> datasets = load_and_preprocess(tokenizer, config.data)
-    >>> print(datasets['train'][0].keys())
-    dict_keys(['input_ids', 'attention_mask', 'labels'])
 """
 
 from __future__ import annotations
 
+from glob import glob
 import re
 import unicodedata
 from pathlib import Path
@@ -73,62 +68,96 @@ def clean_text(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def load_dataset_from_files(
-    train_file: str | Path,
-    valid_file: str | Path,
-    test_file: Optional[str | Path] = None,
+        train_file: str | Path,
+        valid_file: str | Path,
+        test_file: Optional[str | Path] = None,
 ) -> DatasetDict:
-    """Tải dữ liệu từ các file hoặc thư mục (hỗ trợ CSV/Parquet) vào DatasetDict.
-
-    Tham số:
-        train_file: Đường dẫn (hoặc mẫu glob) đến dữ liệu huấn luyện.
-        valid_file: Đường dẫn (hoặc mẫu glob) đến dữ liệu đánh giá.
-        test_file: Tùy chọn đường dẫn (hoặc mẫu glob) đến dữ liệu kiểm tra.
-
+    """Tải toàn bộ file CSV/Parquet khớp với mỗi pattern vào DatasetDict.
     Trả về:
         DatasetDict chứa các phần chia 'train', 'validation', và 'test'.
     """
-    from datasets import load_dataset
-    
-    data_files = {
+    from datasets import concatenate_datasets, load_dataset
+
+    patterns = {
         "train": str(train_file),
         "validation": str(valid_file),
     }
     if test_file:
-        data_files["test"] = str(test_file)
-        
-    # Tự động nhận diện định dạng dựa trên đuôi file
-    file_format = "csv" if "csv" in str(train_file).lower() else "parquet"
-    
-    logger.info(f"Đang tải dữ liệu (định dạng: {file_format}) từ các đường dẫn: {data_files}")
-    dataset = load_dataset(file_format, data_files=data_files)
+        patterns["test"] = str(test_file)
 
-    # Đổi tên cột nếu người dùng gõ sai chính tả (sumary -> summary)
-    for split_name, split_data in dataset.items():
-        if "sumary" in split_data.column_names:
-            logger.info(f"Tự động đổi tên cột 'sumary' thành 'summary' trong tập {split_name}")
-            dataset[split_name] = split_data.rename_column("sumary", "summary")
-            split_data = dataset[split_name]
-            
-        if "Document" in split_data.column_names:
-            dataset[split_name] = split_data.rename_column("Document", "article")
-            split_data = dataset[split_name]
-            
-        if "Summary" in split_data.column_names:
-            dataset[split_name] = split_data.rename_column("Summary", "summary")
-            split_data = dataset[split_name]
+    def resolve_files(split_name: str, pattern: str) -> list[Path]:
+        paths = sorted(
+            {Path(match) for match in glob(pattern, recursive=True) if Path(match).is_file()}
+        )
+        if not paths:
+            raise FileNotFoundError(
+                f"Không tìm thấy file cho split '{split_name}' với pattern: {pattern}"
+            )
+        unsupported = [
+            path
+            for path in paths
+            if path.suffix.casefold() not in {".csv", ".parquet", ".pq"}
+        ]
+        if unsupported:
+            names = ", ".join(str(path) for path in unsupported)
+            raise ValueError(
+                f"Split '{split_name}' có định dạng không hỗ trợ: {names}. "
+                "Chỉ hỗ trợ CSV, Parquet hoặc PQ."
+            )
+        return paths
 
-    # Xác thực các cột bắt buộc
-    for split_name, split_data in dataset.items():
+    def validate_columns(split_name: str, split_data: Dataset) -> Dataset:
         if "article" not in split_data.column_names:
             raise ValueError(
                 f"Thiếu cột 'article' trong tập {split_name}. "
-                f"Các cột hiện có: {split_data.column_names}"
+                f"Các cột hiện có: {split_data.column_names}. "
+                "Hãy chạy scripts/clean_data.py để chuẩn hóa dữ liệu trước."
             )
         if "summary" not in split_data.column_names:
             raise ValueError(
                 f"Thiếu cột 'summary' trong tập {split_name}. "
-                f"Các cột hiện có: {split_data.column_names}"
+                f"Các cột hiện có: {split_data.column_names}. "
+                "Hãy chạy scripts/clean_data.py để chuẩn hóa dữ liệu trước."
             )
+        return split_data
+
+    resolved_files = {
+        split_name: resolve_files(split_name, pattern)
+        for split_name, pattern in patterns.items()
+    }
+    logger.info(
+        "Đang tải dữ liệu: "
+        + "; ".join(
+            f"{split}={len(paths)} file" for split, paths in resolved_files.items()
+        )
+    )
+
+    splits: dict[str, Dataset] = {}
+    for split_name, paths in resolved_files.items():
+        files_by_format: dict[str, list[str]] = {"csv": [], "parquet": []}
+        for path in paths:
+            file_format = "csv" if path.suffix.casefold() == ".csv" else "parquet"
+            files_by_format[file_format].append(str(path))
+
+        loaded_parts: list[Dataset] = []
+        for file_format in ("csv", "parquet"):
+            files = files_by_format[file_format]
+            if not files:
+                continue
+            loaded = load_dataset(
+                file_format,
+                data_files={split_name: files},
+                split=split_name,
+            )
+            loaded_parts.append(validate_columns(split_name, loaded))
+
+        splits[split_name] = (
+            loaded_parts[0]
+            if len(loaded_parts) == 1
+            else concatenate_datasets(loaded_parts)
+        )
+
+    dataset = DatasetDict(splits)
 
     logger.info(
         f"Đã tải tập dữ liệu: "
@@ -145,9 +174,9 @@ def load_dataset_from_files(
 # ---------------------------------------------------------------------------
 
 def preprocess_for_seq2seq(
-    dataset: DatasetDict,
-    tokenizer: Any,
-    data_config: DataConfig,
+        dataset: DatasetDict,
+        tokenizer: Any,
+        data_config: DataConfig,
 ) -> DatasetDict:
     """Tokenize tập dữ liệu cho việc huấn luyện seq2seq.
 
@@ -235,8 +264,8 @@ def preprocess_for_seq2seq(
 # ---------------------------------------------------------------------------
 
 def load_and_preprocess(
-    tokenizer: Any,
-    data_config: DataConfig,
+        tokenizer: Any,
+        data_config: DataConfig,
 ) -> DatasetDict:
     """Tải dữ liệu và tiền xử lý trong một bước.
 

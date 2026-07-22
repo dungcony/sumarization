@@ -1,0 +1,54 @@
+# Phase 1: fine-tune từ checkpoint ViT5 đã học tóm tắt VietNews.
+phase:
+  name: "phase_1" # Tên phase, dùng để phân biệt các giai đoạn fine-tune.
+  description: "Fine-tune toàn bộ ViT5-base trên dữ liệu Parquet tổng quát." # Mô tả ngắn gọn về phase.
+model:
+  name_or_path: "VietAI/vit5-base-vietnews-summarization" # Checkpoint đã biết nhiệm vụ summarization.
+  use_fast_tokenizer: false # ViT5 dùng SentencePiece; tokenizer chậm ổn định hơn.
+  trust_remote_code: false # Không chạy mã tùy chỉnh từ model repository.
+
+data:
+  train_file: "data/phase_1/train_*.**" # Dữ liệu sạch dùng để cập nhật trọng số.
+  valid_file: "data/phase_1/validation_*.**" # Dữ liệu sạch chọn checkpoint tốt nhất.
+  test_file: "data/phase_1/test_*.**" # Dữ liệu sạch đánh giá cuối cùng, không dùng để tune.
+  source_prefix: "summarize: " # Tiền tố được thêm trước bài viết; phải giữ nhất quán khi predict.
+  max_source_length: 768 # Số token nguồn tối đa; phần vượt quá sẽ bị cắt.
+  max_target_length: 256 # Số token summary chuẩn tối đa khi tính loss.
+
+training:
+  output_dir: "outputs_phase_1/vit5_warmstart" # Nơi lưu checkpoint, log và metrics của phase 1.
+  seed: 42 # Seed giúp các lần chạy dễ tái lập hơn.
+  num_train_epochs: 2 # Ít epoch hơn vì checkpoint đã biết summarization.
+  per_device_train_batch_size: 4 # Số mẫu trên mỗi thiết bị cho một forward pass train.
+  per_device_eval_batch_size: 8 # Số mẫu trên mỗi thiết bị khi validation/test.
+  gradient_accumulation_steps: 2 # Effective batch mỗi thiết bị = 4 x 2 = 8.
+  learning_rate: 0.00001 # LR thấp 1e-5 giúp hạn chế quên kiến thức warm-start.
+  weight_decay: 0.01 # Regularization trên trọng số; quá cao có thể gây underfitting.
+  warmup_ratio: 0.05 # 5% bước đầu tăng dần learning rate.
+  lr_scheduler_type: "cosine" # Giảm learning rate theo đường cosine sau warmup.
+  label_smoothing_factor: 0.1 # Làm mềm nhãn; quá cao có thể làm model học kém sắc nét.
+  precision: "auto" # Tự chọn bf16/fp16/fp32 theo phần cứng.
+  eval_strategy: "steps" # Chạy validation theo số optimizer step.
+  eval_steps: 200 # Cứ 200 optimizer step chạy validation một lần.
+  save_strategy: "steps" # Lưu checkpoint theo số optimizer step.
+  save_steps: 200 # Cứ 200 optimizer step lưu một checkpoint.
+  save_total_limit: 2 # Chỉ giữ tối đa hai checkpoint để tiết kiệm dung lượng.
+  logging_steps: 100 # Cứ 100 optimizer step ghi loss và learning rate.
+  metric_for_best_model: "rougeL" # Dùng ROUGE-L để xếp hạng checkpoint.
+  greater_is_better: true # ROUGE-L càng cao thì checkpoint càng tốt.
+  load_best_model_at_end: true # Kết thúc train sẽ nạp lại checkpoint tốt nhất.
+  early_stopping_patience: 5 # Dừng sau 5 lần validation liên tiếp không cải thiện.
+
+generation:
+  # Các thuộc tính dưới đây chi phối lúc sinh summary khi eval/inference,
+  # không thay đổi cách labels được cắt trong quá trình train.
+  max_length: 256 # Tổng số token tối đa model được phép sinh.
+  min_length: 20 # Số token tối thiểu trước khi model được phép kết thúc.
+  num_beams: 6 # Số nhánh beam search; cao hơn chưa chắc luôn cho summary tốt hơn.
+  length_penalty: 1.0 # >1 ưu tiên summary dài hơn; <1 ưu tiên summary ngắn hơn.
+  no_repeat_ngram_size: 3 # Không cho lặp lại nguyên cụm 3 token.
+  repetition_penalty: 1.05 # Phạt nhẹ token lặp; 1.0 tương đương không phạt.
+  early_stopping: true # Dừng beam search khi các nhánh phù hợp đã hoàn tất.
+
+lora:
+  enabled: false # False = full fine-tuning toàn bộ tham số, không dùng LoRA.

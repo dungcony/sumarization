@@ -1,0 +1,16 @@
+README.md
+pyproject.toml
+src/__init__.py
+src/config.py
+src/data.py
+src/evaluator.py
+src/model.py
+src/predict.py
+src/trainer.py
+src/utils.py
+tests/test_clean_data.py
+vn_summarization.egg-info/PKG-INFO
+vn_summarization.egg-info/SOURCES.txt
+vn_summarization.egg-info/dependency_links.txt
+vn_summarization.egg-info/requires.txt
+vn_summarization.egg-info/top_level.txt

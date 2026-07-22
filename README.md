@@ -4,7 +4,7 @@
 
 ## 🎯 Tổng quan / Overview
 
-Framework này giúp fine-tune các mô hình ngôn ngữ lớn (ViT5, BARTpho, mT5) trên dữ liệu tóm tắt văn bản tiếng Việt. Kết quả tốt nhất đạt **ROUGE-L ≈ 0.49** với ViT5-base full fine-tuning.
+Framework này giúp fine-tune ViT5 trên dữ liệu tóm tắt văn bản tiếng Việt. Kết quả tốt nhất đạt **ROUGE-L ≈ 0.49** với ViT5-base full fine-tuning.
 
 This framework fine-tunes seq2seq language models for Vietnamese abstractive text summarization. Best result: **ROUGE-L ≈ 0.49** with ViT5-base full fine-tuning.
 
@@ -13,9 +13,7 @@ This framework fine-tunes seq2seq language models for Vietnamese abstractive tex
 | Model | ROUGE-1 | ROUGE-2 | ROUGE-L | Type |
 |-------|---------|---------|---------|------|
 | **ViT5-base (full)** | 74.22 | 46.75 | **48.89** | Full fine-tuning |
-| BARTpho-syllable | 73.47 | 46.17 | 48.07 | Full fine-tuning |
 | ViT5 warm-start | 71.61 | 44.26 | 47.28 | Full fine-tuning |
-| ViT5-base (LoRA) | 72.62 | 44.08 | 46.63 | LoRA r=16 |
 
 ## 🚀 Bắt đầu nhanh / Quick Start
 
@@ -32,11 +30,8 @@ pip install -e .
 # ViT5-base full fine-tuning (khuyến nghị / recommended)
 python scripts/train.py --config configs/vit5_base.yaml
 
-# ViT5 với LoRA (tiết kiệm bộ nhớ / memory-efficient)
-python scripts/train.py --config configs/vit5_base_lora.yaml
-
-# BARTpho
-python scripts/train.py --config configs/bartpho.yaml
+# ViT5 warm-start từ checkpoint đã học summarization
+python scripts/train.py --config configs/vit5_warmstart.yaml
 
 # Test nhanh (chạy 10 bước / quick test with 10 steps)
 python scripts/train.py --config configs/vit5_base.yaml \
@@ -71,10 +66,7 @@ python scripts/predict.py \
 text-sumarization/
 ├── configs/                      # Cấu hình YAML / YAML configurations
 │   ├── vit5_base.yaml            # ViT5 full fine-tuning ⭐ (best)
-│   ├── vit5_base_lora.yaml       # ViT5 + LoRA (tiết kiệm memory)
-│   ├── vit5_warmstart.yaml       # ViT5 warm-start (đã pre-trained)
-│   ├── bartpho.yaml              # BARTpho Vietnamese BART
-│   └── mt5_base.yaml             # mT5 multilingual T5
+│   └── vit5_warmstart.yaml       # ViT5 warm-start (đã học summarization)
 │
 ├── vn_summarization/             # Package chính / Main Python package
 │   ├── __init__.py               # Package init
@@ -102,8 +94,6 @@ text-sumarization/
 |-------|----------------|--------|------------------|
 | **ViT5-base** | `VietAI/vit5-base` | 223M | ⭐ Best overall |
 | ViT5 VietNews | `VietAI/vit5-base-vietnews-summarization` | 223M | Warm-start |
-| BARTpho | `vinai/bartpho-syllable` | 140M | No prefix needed |
-| mT5-base | `google/mt5-base` | 580M | Multilingual |
 
 ## ⚙️ Cấu hình / Configuration
 
@@ -134,13 +124,40 @@ Dữ liệu ở định dạng Apache Parquet với 2 cột bắt buộc:
 | `article` | string | Bài viết gốc / Source article |
 | `summary` | string | Tóm tắt / Target summary |
 
-Files mặc định nằm ở / Default data location:
+Nguồn gốc nằm trong `data/original`. Script làm sạch tạo đúng hai bộ cho hai
+phase và giữ nguyên định dạng:
+
 ```
-data/fine-turn/
-├── train-00000-of-00001.parquet   # ~10,000 samples
-├── valid-00000-of-00001.parquet   # ~1,300 samples
-└── test-00000-of-00001.parquet    # ~1,300 samples (optional)
+data/clean/
+├── parquet/                  # Phase 1: tin tức ngẫu nhiên
+│   ├── train/cleaned.parquet
+│   ├── validation/cleaned.parquet
+│   └── test/cleaned.parquet
+└── medical/                  # Phase 2: chủ đề y tế
+    ├── train/cleaned.csv
+    ├── validation/cleaned.csv
+    └── test/cleaned.csv
 ```
+
+Kiểm tra dữ liệu mà không ghi file / Audit without writing files:
+
+```bash
+python scripts/clean_data.py --audit-only \
+    --dedupe-repeated-sentences \
+    --near-duplicate-threshold 0.90
+```
+
+Tạo cả hai bộ sạch (không sửa dữ liệu gốc):
+
+```bash
+python scripts/clean_data.py \
+    --dedupe-repeated-sentences \
+    --near-duplicate-threshold 0.90
+```
+
+Phase 2 chỉ lấy `herding_512_bio_medicine.csv`. Sáu CSV y tế còn lại là các
+biến thể của cùng source nên không được gộp. `data_summary.csv` không thuộc
+pipeline hai phase hiện tại.
 
 ## 🧪 Sử dụng trong Python / Python API
 
@@ -165,7 +182,7 @@ print(summary)
 ## 💡 Tips
 
 - **Bắt đầu với ViT5-base** — cho kết quả tốt nhất / Start with ViT5-base for best results
-- **Dùng LoRA nếu ít VRAM** — chỉ cần 8GB / Use LoRA if limited GPU memory (8GB+)
+- **Thử ViT5 warm-start** — dùng checkpoint đã học summarization làm điểm khởi đầu
 - **Test nhanh trước khi train dài** — dùng `--max-steps 10` / Quick test before long training
 - **Kiểm tra tokenizer trước** — chạy `scripts/check_tokenizer.py` / Check tokenizer first
 
