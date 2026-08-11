@@ -1,0 +1,54 @@
+# Phase 2a: fine-tune ViT5 trên dữ liệu CSV chuyên ngành (đóng băng encoder).
+phase:
+  name: "phase_2a"
+  description: "Phase 2a: Freeze encoder, chỉ train decoder trên dữ liệu y tế."
+
+model:
+  name_or_path: "outputs_phase_1/vit5_base/best" # Load từ phase 1
+  use_fast_tokenizer: false
+  trust_remote_code: false
+
+data:
+  train_file: "data/phase_2/train_*.*"
+  valid_file: "data/phase_2/validation_*.*"
+  test_file: "data/phase_2/test_*.*"
+  source_prefix: "summarize: "
+  max_source_length: 768
+  max_target_length: 160
+
+training:
+  output_dir: "outputs/vit5_base_phase_2a"
+  seed: 42
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 2
+  learning_rate: 0.000005 # 5e-6
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  label_smoothing_factor: 0.05
+  precision: "auto"
+  freeze_encoder: true # QUAN TRỌNG: Đóng băng encoder
+  eval_strategy: "steps"
+  eval_steps: 250
+  save_strategy: "steps"
+  save_steps: 250
+  save_total_limit: 2
+  logging_steps: 100
+  metric_for_best_model: "rougeL"
+  greater_is_better: true
+  load_best_model_at_end: true
+  early_stopping_patience: 5
+
+generation:
+  max_length: 128
+  min_length: 10
+  num_beams: 4
+  length_penalty: 1.0
+  no_repeat_ngram_size: 3
+  repetition_penalty: 1.0
+  early_stopping: true
+
+lora:
+  enabled: false

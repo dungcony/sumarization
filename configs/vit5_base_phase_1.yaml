@@ -1,0 +1,56 @@
+# Phase 1: fine-tune toàn bộ ViT5-base trên dữ liệu Parquet tổng quát.
+phase:
+  name: "phase_1" # Tên phase, dùng để phân biệt các giai đoạn fine-tune.
+  description: "Fine-tune toàn bộ ViT5-base trên dữ liệu Parquet tổng quát." # Mô tả ngắn gọn về phase.
+model:
+  name_or_path: "VietAI/vit5-base" # Checkpoint gốc dùng để khởi tạo model.
+  use_fast_tokenizer: false # ViT5 dùng SentencePiece; tokenizer chậm ổn định hơn.
+  trust_remote_code: false # Không chạy mã tùy chỉnh từ model repository.
+
+data:
+  train_file: "data/phase_1/train_*.**" # Dữ liệu sạch dùng để cập nhật trọng số.
+  valid_file: "data/phase_1/validation_*.**" # Dữ liệu sạch chọn checkpoint tốt nhất.
+  test_file: "data/phase_1/test_*.**" # Dữ liệu sạch đánh giá cuối cùng, không dùng để tune.
+  source_prefix: "summarize: " # Tiền tố nhiệm vụ được thêm trước mỗi bài viết.
+  max_source_length: 768 # Số token nguồn tối đa; phần vượt quá sẽ bị cắt.
+  max_target_length: 256 # Số token summary chuẩn tối đa khi tính loss.
+
+training:
+  output_dir: "outputs_phase_1/vit5_base" # Nơi lưu checkpoint, log và metrics của phase 1.
+  seed: 42 # Seed giúp các lần chạy dễ tái lập hơn.
+  num_train_epochs: 3 # Số lần model đi qua toàn bộ tập train.
+  per_device_train_batch_size: 2 # Mức khởi đầu an toàn cho một GPU 16 GB.
+  per_device_eval_batch_size: 1 # Generation tốn VRAM; tăng lên 2 nếu smoke test ổn định.
+  gradient_accumulation_steps: 8 # Effective batch trên một GPU = 2 x 8 = 16.
+  learning_rate: 0.00003 # Learning rate cực đại: 3e-5.
+  weight_decay: 0.01 # Regularization giúp hạn chế overfitting trọng số.
+  warmup_ratio: 0.05 # 5% bước đầu tăng dần learning rate.
+  lr_scheduler_type: "cosine" # Giảm learning rate theo đường cosine sau warmup.
+  optim: "adafactor" # Tiết kiệm bộ nhớ optimizer cho dòng T5.
+  label_smoothing_factor: 0.0 # Giữ loss dễ diễn giải ở lần train chuẩn đầu tiên.
+  precision: "auto" # Tự chọn bf16/fp16/fp32 theo phần cứng.
+  gradient_checkpointing: true # Giảm VRAM cho full fine-tuning ViT5-base.
+  freeze_encoder: false # Phase 1 cập nhật toàn bộ model.
+  eval_strategy: "epoch" # Chọn checkpoint chỉ bằng validation sau mỗi epoch.
+  save_strategy: "epoch" # Lưu cùng nhịp validation để load_best_model hoạt động đúng.
+  save_total_limit: 2 # Chỉ giữ tối đa hai checkpoint để tiết kiệm dung lượng.
+  logging_steps: 50 # Cứ 50 optimizer step ghi loss và learning rate.
+  metric_for_best_model: "rougeL" # Dùng ROUGE-L để xếp hạng checkpoint.
+  greater_is_better: true # ROUGE-L càng cao thì checkpoint càng tốt.
+  load_best_model_at_end: true # Kết thúc train sẽ nạp lại checkpoint tốt nhất.
+  early_stopping_patience: 2 # Dừng sau 2 lần validation liên tiếp không cải thiện.
+  ddp_find_unused_parameters: false # Phù hợp với full fine-tuning chuẩn trên nhiều GPU.
+
+generation:
+  # Các thuộc tính dưới đây chi phối lúc sinh summary khi eval/inference,
+  # không thay đổi cách labels được cắt trong quá trình train.
+  max_length: 256 # Tổng số token tối đa model được phép sinh.
+  min_length: 20 # Số token tối thiểu trước khi model được phép kết thúc.
+  num_beams: 2 # Giảm thời gian/VRAM và dùng nhất quán giữa validation, test, inference.
+  length_penalty: 1.0 # >1 ưu tiên summary dài hơn; <1 ưu tiên summary ngắn hơn.
+  no_repeat_ngram_size: 3 # Không cho lặp lại nguyên cụm 3 token.
+  repetition_penalty: 1.0 # 1.0 là không phạt lặp token bổ sung.
+  early_stopping: true # Dừng beam search khi các nhánh phù hợp đã hoàn tất.
+
+lora:
+  enabled: false # False = full fine-tuning toàn bộ tham số, không dùng LoRA.

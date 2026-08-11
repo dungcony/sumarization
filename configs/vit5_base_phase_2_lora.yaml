@@ -1,0 +1,64 @@
+# Phase 2: giữ nguyên checkpoint Phase 1 và chỉ train LoRA trên data/phase_2.
+phase:
+  name: "phase_2_lora"
+  description: "Gắn LoRA vào checkpoint Phase 1 và chỉ train adapter trên dữ liệu Phase 2."
+
+model:
+  # Notebook Kaggle cần override path này bằng thư mục best/ đã mount từ output Phase 1.
+  name_or_path: "outputs_phase_1/vit5_base/best"
+  use_fast_tokenizer: false
+  trust_remote_code: false
+
+data:
+  # Giữ nguyên các split Phase 2 hiện có; không lọc, gộp hay chia lại dữ liệu.
+  train_file: "data/phase_2/train_*.*"
+  valid_file: "data/phase_2/validation_*.*"
+  test_file: "data/phase_2/test_*.*"
+  source_prefix: "summarize: "
+  max_source_length: 768
+  max_target_length: 160
+
+training:
+  # Output riêng để không bao giờ ghi đè full checkpoint Phase 1.
+  output_dir: "outputs_phase_2_lora/vit5_base"
+  seed: 42
+  num_train_epochs: 3
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  warmup_ratio: 0.05
+  lr_scheduler_type: "cosine"
+  optim: "adamw_torch"
+  label_smoothing_factor: 0.0
+  precision: "auto"
+  gradient_checkpointing: false
+
+  # PEFT tự đóng băng base model; không dùng freeze_encoder cùng LoRA.
+  freeze_encoder: false
+  eval_strategy: "epoch"
+  save_strategy: "epoch"
+  save_total_limit: 2
+  logging_steps: 25
+  metric_for_best_model: "rougeL"
+  greater_is_better: true
+  load_best_model_at_end: true
+  early_stopping_patience: 2
+  ddp_find_unused_parameters: false
+
+generation:
+  max_length: 160
+  min_length: 10
+  num_beams: 2
+  length_penalty: 1.0
+  no_repeat_ngram_size: 3
+  repetition_penalty: 1.0
+  early_stopping: true
+
+lora:
+  enabled: true
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: "auto"
