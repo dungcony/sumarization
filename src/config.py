@@ -502,6 +502,11 @@ def validate_config(config: SummarizationConfig) -> SummarizationConfig:
     if gc.min_length > gc.max_length:
         errors.append("'generation.min_length' không được lớn hơn max_length")
     at_least("generation.num_beams", gc.num_beams, 1)
+    if gc.num_beams == 1 and gc.early_stopping:
+        errors.append(
+            "'generation.early_stopping=true' chỉ hợp lệ khi "
+            "'generation.num_beams > 1'"
+        )
     at_least("generation.no_repeat_ngram_size", gc.no_repeat_ngram_size, 0)
     if gc.repetition_penalty <= 0:
         errors.append("'generation.repetition_penalty' phải > 0")

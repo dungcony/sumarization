@@ -58,6 +58,9 @@ def setup_logger(
         logger.addHandler(handler)
 
     logger.setLevel(level)
+    # Kaggle/Jupyter thường đã cấu hình root logger. Không chặn propagation sẽ
+    # khiến mỗi thông báo xuất hiện hai lần: custom format và ``INFO:name``.
+    logger.propagate = False
     return logger
 
 

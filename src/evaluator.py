@@ -296,6 +296,9 @@ def evaluate_checkpoint(
         predict_with_generate=True,
         generation_max_length=config.generation.max_length,
         fp16=False,  # Sử dụng độ chính xác đầy đủ (full precision) cho việc đánh giá
+        # Kaggle thường cài sẵn wandb. Nếu không chỉ định, Transformers có thể
+        # tự bật integration và chặn notebook bằng prompt đăng nhập giữa run.
+        report_to=[],
     )
 
     data_collator = DataCollatorForSeq2Seq(
